@@ -20,3 +20,13 @@ func (c *Client) Zrange(key string,start,stop int,withscore bool) ([]string, err
 	result,err:=rs.List()
 	return result,err
 }
+
+func (c *Client) Zrem(key string,members ...interface{}) (int,error)  {
+	newargs:=[]interface{}{key}
+	for _,tmpval:=range members{
+		newargs=append(newargs,tmpval)
+	}
+	rs:=c.Cmd("zrem",newargs...)
+	result,err:=rs.Int()
+	return result,err
+}
