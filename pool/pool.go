@@ -89,6 +89,10 @@ func (p *Pool) Get() (*redis.Client, error) {
 	case conn := <-p.pool:
 		p.ActivitySize+=1
 		p.InSize-=1
+		_,err:=conn.Ping()
+		if err!=nil{
+			return p.Get()
+		}
 		return conn, nil
 	default:
 		if p.ActivitySize+p.InSize<p.MaxSize{
