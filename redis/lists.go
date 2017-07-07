@@ -30,8 +30,8 @@ func (c *Client) Lindex(key string ,index int) (string, error)  {
 
 func (c *Client) Ldel(key string ,index int) (error)  {
 	tmpval:=strconv.Itoa(int(time.Now().UnixNano()))
-	resultLset,err:=c.Lset(key,index,tmpval)
-	if resultLset=="ok"{
+	_,err:=c.Lset(key,index,tmpval)
+	if err==nil{
 		_,err=c.Lrem(key,1,tmpval)
 	}
 	return err
@@ -52,5 +52,11 @@ func (c *Client) Lrem(key string ,count int,val interface{}) (int, error)  {
 func (c *Client) Lrange(key string ,start,stop int) ([]string, error)  {
 	rs:=c.Cmd("lrange",key,start,stop)
 	result,err:=rs.List()
+	return result,err
+}
+
+func (c *Client) Ltrim(key string ,start,stop int) (string, error)  {
+	rs:=c.Cmd("ltrim",key,start,stop)
+	result,err:=rs.Str()
 	return result,err
 }

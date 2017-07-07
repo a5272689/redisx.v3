@@ -2,6 +2,7 @@ package pool
 
 import (
 	"github.com/mediocregopher/radix.v2/redis"
+	"time"
 )
 
 // Pool is a simple connection pool for redis Clients. It will create a small
@@ -11,20 +12,20 @@ import (
 type Pool struct {
 	pool chan *redis.Client
 	df   DialFunc
-
+	MaxSize,ActivitySize,InSize int
 	// The network/address that the pool is connecting to. These are going to be
 	// whatever was passed into the New function. These should not be
 	// changed after the pool is initialized
-	Network, Addr string
+	Network, Addr,Passwrod string
 }
 
 // DialFunc is a function which can be passed into NewCustom
-type DialFunc func(network, addr string) (*redis.Client, error)
+type DialFunc func(network, addr  string) (*redis.Client, error)
 
 // NewCustom is like New except you can specify a DialFunc which will be
 // used when creating new connections for the pool. The common use-case is to do
 // authentication for new connections.
-func NewCustom(network, addr string, size int, df DialFunc) (*Pool, error) {
+func NewCustom(network, addr,password string, size int, df DialFunc) (*Pool, error) {
 	var client *redis.Client
 	var err error
 	pool := make([]*redis.Client, 0, size)
@@ -37,11 +38,33 @@ func NewCustom(network, addr string, size int, df DialFunc) (*Pool, error) {
 			pool = pool[:0]
 			break
 		}
+		if len(password)>0{
+			_,err=client.Auth(password)
+			if err != nil {
+				for _, client = range pool {
+					client.Close()
+				}
+				pool = pool[:0]
+				break
+			}
+		}
+		_,err=client.Ping()
+		if err!=nil {
+			for _, client = range pool {
+				client.Close()
+			}
+			pool = pool[:0]
+			break
+		}
 		pool = append(pool, client)
 	}
 	p := Pool{
 		Network: network,
 		Addr:    addr,
+		Passwrod: password,
+		MaxSize: size,
+		ActivitySize: 0,
+		InSize: size,
 		pool:    make(chan *redis.Client, len(pool)),
 		df:      df,
 	}
@@ -55,8 +78,8 @@ func NewCustom(network, addr string, size int, df DialFunc) (*Pool, error) {
 // redis.Dial(network, addr). The size indicates the maximum number of idle
 // connections to have waiting to be used at any given moment. If an error is
 // encountered an empty (but still usable) pool is returned alongside that error
-func New(network, addr string, size int) (*Pool, error) {
-	return NewCustom(network, addr, size, redis.Dial)
+func New(network, addr,password string, size int) (*Pool, error) {
+	return NewCustom(network, addr,password, size, redis.Dial)
 }
 
 // Get retrieves an available redis client. If there are none available it will
@@ -64,9 +87,31 @@ func New(network, addr string, size int) (*Pool, error) {
 func (p *Pool) Get() (*redis.Client, error) {
 	select {
 	case conn := <-p.pool:
+		p.ActivitySize+=1
+		p.InSize-=1
 		return conn, nil
 	default:
-		return p.df(p.Network, p.Addr)
+		if p.ActivitySize+p.InSize<p.MaxSize{
+			p.ActivitySize+=1
+			client, err := p.df(p.Network, p.Addr)
+			if err != nil {
+				return client,err
+			}
+			if len(p.Passwrod)>0{
+				_,err=client.Auth(p.Passwrod)
+				if err != nil {
+					return client,err
+				}
+			}
+			_,err=client.Ping()
+			if err!=nil {
+				return client,err
+			}
+			return client,err
+		}else {
+			time.Sleep(time.Millisecond*50)
+			return p.Get()
+		}
 	}
 }
 
@@ -74,9 +119,11 @@ func (p *Pool) Get() (*redis.Client, error) {
 // closed instead. If the client is already closed (due to connection failure or
 // what-have-you) it will not be put back in the pool
 func (p *Pool) Put(conn *redis.Client) {
+	p.ActivitySize-=1
 	if conn.LastCritical == nil {
 		select {
 		case p.pool <- conn:
+			p.InSize+=1
 		default:
 			conn.Close()
 		}
@@ -99,6 +146,7 @@ func (p *Pool) Cmd(cmd string, args ...interface{}) *redis.Resp {
 // Assuming there are no other connections waiting to be Put back this method
 // effectively closes and cleans up the pool.
 func (p *Pool) Empty() {
+	p.InSize=0
 	var conn *redis.Client
 	for {
 		select {
