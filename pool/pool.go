@@ -41,6 +41,7 @@ func NewCustom(network, addr,password string, size int, df DialFunc) (*Pool, err
 		if len(password)>0{
 			_,err=client.Auth(password)
 			if err != nil {
+				client.Close()
 				for _, client = range pool {
 					client.Close()
 				}
@@ -50,6 +51,7 @@ func NewCustom(network, addr,password string, size int, df DialFunc) (*Pool, err
 		}
 		_,err=client.Ping()
 		if err!=nil {
+			client.Close()
 			for _, client = range pool {
 				client.Close()
 			}
@@ -87,12 +89,13 @@ func New(network, addr,password string, size int) (*Pool, error) {
 func (p *Pool) Get() (*redis.Client, error) {
 	select {
 	case conn := <-p.pool:
-		p.ActivitySize+=1
 		p.InSize-=1
 		_,err:=conn.Ping()
 		if err!=nil{
+			conn.Close()
 			return p.Get()
 		}
+		p.ActivitySize+=1
 		return conn, nil
 	default:
 		if p.ActivitySize+p.InSize<p.MaxSize{
@@ -104,11 +107,13 @@ func (p *Pool) Get() (*redis.Client, error) {
 			if len(p.Passwrod)>0{
 				_,err=client.Auth(p.Passwrod)
 				if err != nil {
+					client.Close()
 					return client,err
 				}
 			}
 			_,err=client.Ping()
 			if err!=nil {
+				client.Close()
 				return client,err
 			}
 			return client,err
