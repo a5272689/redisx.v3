@@ -31,9 +31,9 @@ func (p *Pool) Lindex(key string ,index int) (string, error)  {
 
 func (p *Pool) Ldel(key string ,index int) (error)  {
 	tmpval:=strconv.Itoa(int(time.Now().UnixNano()))
-	_,err:=c.Lset(key,index,tmpval)
+	_,err:=p.Lset(key,index,tmpval)
 	if err==nil{
-		_,err=c.Lrem(key,1,tmpval)
+		_,err=p.Lrem(key,1,tmpval)
 	}
 	return err
 }

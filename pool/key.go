@@ -44,3 +44,9 @@ func (p *Pool) Renamenx(key,newkey string) (int, error) {
 	return result,err
 }
 
+func (p *Pool) Exists(key string) (int, error) {
+	rs:=p.Cmd("exists",key)
+	result,err:=rs.Int()
+	return result,err
+}
+

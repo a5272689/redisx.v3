@@ -1,5 +1,7 @@
 package redis
 
+import "golang.org/x/tools/go/gcimporter15/testdata"
+
 func (c *Client) Keys(pattern string) ([]string, error) {
 	rs:=c.Cmd("keys",pattern)
 	result,err:=rs.List()
@@ -44,3 +46,8 @@ func (c *Client) Renamenx(key,newkey string) (int, error) {
 	return result,err
 }
 
+func (c *Client) Exists(key string) (int, error) {
+	rs:=c.Cmd("exists",key)
+	result,err:=rs.Int()
+	return result,err
+}
